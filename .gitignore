@@ -484,5 +484,3 @@ $RECYCLE.BIN/
 
 # Ignore local development settings
 **/appsettings.Development.json
-
-LedgerEngine.slnx
