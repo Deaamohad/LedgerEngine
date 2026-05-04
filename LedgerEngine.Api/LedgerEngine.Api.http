@@ -1,0 +1,6 @@
+@LedgerEngine.Api_HostAddress = http://localhost:5030
+
+GET {{LedgerEngine.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
