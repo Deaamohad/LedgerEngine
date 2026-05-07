@@ -85,5 +85,36 @@ namespace LedgerEngine.Api.Controllers
                 return StatusCode(500, "An error occurred while processing the transaction.");
             }
         }
+
+        [HttpGet("account/{accountId}/balance")]
+        public async Task<IActionResult> GetAccountBalance(Guid accountId)
+        {
+            var accountExists = await _context.Accounts.AnyAsync(a => a.Id == accountId);
+            if (!accountExists)
+                return NotFound("Account not found.");
+
+            var balance = await _context.LedgerEntries
+                .Where(e => e.AccountId == accountId)
+                .SumAsync(e => e.Amount);
+
+            return Ok(new { 
+                AccountId = accountId, 
+                CurrentBalance = balance 
+            });
+        }
+
+        [HttpGet("account/{accountId}/history")]
+        public async Task<IActionResult> GetTransactionHistory(Guid accountId)
+        {
+            var history = await _context.LedgerEntries
+                .Where(e => e.AccountId == accountId)
+                .OrderByDescending(e => e.CreatedAt)
+                .ToListAsync();
+
+            if (!history.Any())
+                return NotFound("No transactions found for this account.");
+
+            return Ok(history);
+        }  
     }
 }
