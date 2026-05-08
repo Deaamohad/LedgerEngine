@@ -13,9 +13,13 @@ namespace LedgerEngine.Api.Controllers
     public class TransactionsController : ControllerBase
     {
         private readonly AppDbContext _context;
-        public TransactionsController(AppDbContext context)
+        private readonly Guid _centralBankId;
+
+        public TransactionsController(AppDbContext context, IConfiguration configuration)
         {
             _context = context;
+            var bankIdString = configuration["LedgerSettings:CentralBankId"];
+            _centralBankId = Guid.Parse(bankIdString);
         }
         public class TransactionRequest
         {
@@ -47,6 +51,15 @@ namespace LedgerEngine.Api.Controllers
             if (!accountsExist)
                 return NotFound("One or both accounts do not exist.");
 
+            if (request.FromAccountId != _centralBankId)
+            {
+                var senderBalance = await _context.LedgerEntries
+                    .Where(e => e.AccountId == request.FromAccountId)
+                    .SumAsync(e => e.Amount);
+            
+                if (senderBalance < request.Amount)
+                    return BadRequest("Insufficient funds. The sender does not have enough money to complete this transaction.");
+            }
             var transactionId = Guid.NewGuid();
             var timestamp = DateTime.UtcNow;
 
