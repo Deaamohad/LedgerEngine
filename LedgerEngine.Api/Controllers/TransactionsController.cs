@@ -79,7 +79,7 @@ namespace LedgerEngine.Api.Controllers
 
                 return Ok(new { Message = "Transaction successful", TransactionId = transactionId });
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 await transaction.RollbackAsync();
                 return StatusCode(500, "An error occurred while processing the transaction.");
