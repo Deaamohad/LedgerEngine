@@ -1,0 +1,13 @@
+@host = http://localhost:5030
+@token = TOKEN
+
+POST {{host}}/api/Auth/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "password123"
+}
+
+GET {{host}}/api/Transactions/account/7c8b4072-7ace-4045-a079-5c60b247389d/history
+Authorization: Bearer {{token}}
