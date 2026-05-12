@@ -131,5 +131,41 @@ namespace LedgerEngine.Api.Controllers
 
             return Ok(history);
         }  
+
+    [HttpPost("deposit")]
+        public async Task<IActionResult> CreateDeposit([FromBody] DepositRequest request)
+        {
+            if (request.Amount <= 0)
+            {
+                return BadRequest("Deposit amount must be greater than zero.");
+            }
+
+            var userIdString = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+    
+            if (string.IsNullOrEmpty(userIdString) || !Guid.TryParse(userIdString, out Guid accountId))
+            {
+                return Unauthorized("Invalid token identity.");
+            }
+
+            var newEntry = new LedgerEntry
+            {
+                Id = Guid.NewGuid(),
+                AccountId = accountId,
+                TransactionId = Guid.NewGuid(),
+                IdempotencyKey = Guid.NewGuid(), 
+                Amount = request.Amount,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _context.LedgerEntries.Add(newEntry);
+            await _context.SaveChangesAsync();
+
+            return Ok(new { Message = "Deposit successful", Entry = newEntry });
+        }
     }
+    public class DepositRequest
+    {
+    public decimal Amount { get; set; }
+    }
+
 }

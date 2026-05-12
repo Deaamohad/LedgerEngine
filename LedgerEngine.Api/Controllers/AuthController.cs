@@ -38,7 +38,11 @@ namespace LedgerEngine.Api.Controllers
             var token = new JwtSecurityToken(
                 issuer: "LedgerEngine",
                 audience: "LedgerEngineUsers",
-                claims: new[] { new Claim(ClaimTypes.Name, request.Username) },
+                claims: new[] 
+                { 
+                    new Claim(ClaimTypes.Name, request.Username),
+                    new Claim(ClaimTypes.NameIdentifier, "7c8b4072-7ace-4045-a079-5c60b247389d") // <--- The new Identity Binding claim!
+                },
                 expires: DateTime.UtcNow.AddHours(1),
                 signingCredentials: creds
             );

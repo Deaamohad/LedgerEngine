@@ -1,6 +1,7 @@
 @host = http://localhost:5030
-@token = TOKEN
+@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1lIjoiYWRtaW4iLCJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1laWRlbnRpZmllciI6IjdjOGI0MDcyLTdhY2UtNDA0NS1hMDc5LTVjNjBiMjQ3Mzg5ZCIsImV4cCI6MTc3ODYyMTIzNywiaXNzIjoiTGVkZ2VyRW5naW5lIiwiYXVkIjoiTGVkZ2VyRW5naW5lVXNlcnMifQ.r6V_7-XFYSYx4I8ZQr81p8-B4swQoHeVosvAYaqqxoc
 
+### 1. LOGIN
 POST {{host}}/api/Auth/login
 Content-Type: application/json
 
@@ -9,5 +10,15 @@ Content-Type: application/json
   "password": "password123"
 }
 
+### 2. GET HISTORY
 GET {{host}}/api/Transactions/account/7c8b4072-7ace-4045-a079-5c60b247389d/history
 Authorization: Bearer {{token}}
+
+### 3. DEPOSIT
+POST {{host}}/api/Transactions/deposit
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "amount": 1500.00
+}
