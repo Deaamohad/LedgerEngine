@@ -3,11 +3,13 @@ using System.Linq;
 using System.Threading.Tasks;
 using LedgerEngine.Api.Data;
 using LedgerEngine.Api.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace LedgerEngine.Api.Controllers
 {
+    [Authorize]
     [ApiController]
     [Route("api/[controller]")]
     public class TransactionsController : ControllerBase
