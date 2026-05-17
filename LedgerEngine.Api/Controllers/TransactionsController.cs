@@ -39,7 +39,6 @@ namespace LedgerEngine.Api.Controllers
                 return BadRequest("Amount must be greater than zero.");
 
             var userIdString = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-            
             if (string.IsNullOrEmpty(userIdString) || !Guid.TryParse(userIdString, out Guid senderAccountId))
                 return Unauthorized("Invalid token identity.");
 
@@ -48,7 +47,6 @@ namespace LedgerEngine.Api.Controllers
 
             bool alreadyExists = await _context.LedgerEntries
                 .AnyAsync(e => e.IdempotencyKey == request.IdempotencyKey);
-            
             if (alreadyExists)
                 return Conflict("This transaction has already been processed.");
 
@@ -56,50 +54,71 @@ namespace LedgerEngine.Api.Controllers
             if (!receiverExists)
                 return NotFound("The receiving account does not exist.");
 
-            var senderBalance = await _context.LedgerEntries
-                .Where(e => e.AccountId == senderAccountId)
-                .SumAsync(e => e.Amount);
-
-            var transactionId = Guid.NewGuid();
-            var timestamp = DateTime.UtcNow;
-
-            if (senderBalance < request.Amount)
-                return BadRequest("Insufficient funds.");
-
-            var debitEntry = new LedgerEntry
+            const int maxAttempts = 3;
+            for (int attempt = 1; attempt <= maxAttempts; attempt++)
             {
-                AccountId = senderAccountId,
-                TransactionId = transactionId,
-                IdempotencyKey = request.IdempotencyKey,
-                Amount = -request.Amount, 
-                CreatedAt = timestamp
-            };
+                using var dbTransaction = await _context.Database.BeginTransactionAsync();
+                try
+                {
+                    var senderBalance = await _context.LedgerEntries
+                        .Where(e => e.AccountId == senderAccountId)
+                        .SumAsync(e => e.Amount);
 
-            var creditEntry = new LedgerEntry
-            {
-                AccountId = request.ToAccountId,
-                TransactionId = transactionId,
-                IdempotencyKey = Guid.NewGuid(), 
-                Amount = request.Amount,  
-                CreatedAt = timestamp
-            };
+                    if (senderBalance < request.Amount)
+                    {
+                        await dbTransaction.RollbackAsync();
+                        return BadRequest("Insufficient funds.");
+                    }
 
-            using var transaction = await _context.Database.BeginTransactionAsync();
-            try
-            {
-                _context.LedgerEntries.Add(debitEntry);
-                _context.LedgerEntries.Add(creditEntry);
-                
-                await _context.SaveChangesAsync();
-                await transaction.CommitAsync();
+                    var transactionId = Guid.NewGuid();
+                    var timestamp = DateTime.UtcNow;
 
-                return Ok(new { Message = "Transaction successful", TransactionId = transactionId });
+                    var debitEntry = new LedgerEntry
+                    {
+                        AccountId = senderAccountId,
+                        TransactionId = transactionId,
+                        IdempotencyKey = request.IdempotencyKey,
+                        Amount = -request.Amount,
+                        CreatedAt = timestamp
+                    };
+
+                    var creditEntry = new LedgerEntry
+                    {
+                        AccountId = request.ToAccountId,
+                        TransactionId = transactionId,
+                        IdempotencyKey = Guid.NewGuid(),
+                        Amount = request.Amount,
+                        CreatedAt = timestamp
+                    };
+
+                    _context.LedgerEntries.Add(debitEntry);
+                    _context.LedgerEntries.Add(creditEntry);
+
+                    var senderAccount = await _context.Accounts.SingleAsync(a => a.Id == senderAccountId);
+                    _context.Accounts.Update(senderAccount);
+
+                    await _context.SaveChangesAsync();
+                    await dbTransaction.CommitAsync();
+
+                    return Ok(new { Message = "Transaction successful", TransactionId = transactionId });
+                }
+                catch (DbUpdateConcurrencyException)
+                {
+                    await dbTransaction.RollbackAsync();
+                    if (attempt == maxAttempts)
+                        return Conflict("Transaction failed due to concurrent updates. Please retry.");
+
+                    await Task.Delay(50 * attempt);
+                    continue;
+                }
+                catch (Exception)
+                {
+                    await dbTransaction.RollbackAsync();
+                    return StatusCode(500, "An error occurred while processing the transaction.");
+                }
             }
-            catch (Exception)
-            {
-                await transaction.RollbackAsync();
-                return StatusCode(500, "An error occurred while processing the transaction.");
-            }
+
+            return StatusCode(500, "Unable to process transaction.");
         }
 
         [HttpGet("account/{accountId}/balance")]

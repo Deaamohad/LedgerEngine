@@ -1,4 +1,5 @@
 using System;
+using System.ComponentModel.DataAnnotations;
 
 namespace LedgerEngine.Api.Models
 {
@@ -8,5 +9,7 @@ namespace LedgerEngine.Api.Models
         public string OwnerName { get; set; } = string.Empty;
         public string Currency { get; set; } = "JOD";
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        [Timestamp]
+        public byte[] RowVersion { get; set; } = Array.Empty<byte>();
     }
 }
