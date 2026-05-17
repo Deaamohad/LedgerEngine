@@ -6,6 +6,7 @@ using LedgerEngine.Api.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 
 namespace LedgerEngine.Api.Controllers
 {
@@ -23,51 +24,51 @@ namespace LedgerEngine.Api.Controllers
             var bankIdString = configuration["LedgerSettings:CentralBankId"];
             _centralBankId = Guid.Parse(bankIdString);
         }
-        public class TransactionRequest
+
+        public class TransferRequest
         {
-            public Guid FromAccountId { get; set; }
             public Guid ToAccountId { get; set; }
             public decimal Amount { get; set; }
             public Guid IdempotencyKey { get; set; }
         }
 
-        [HttpPost]
-        public async Task<IActionResult> CreateTransaction([FromBody] TransactionRequest request)
+        [HttpPost("transfer")]
+        public async Task<IActionResult> CreateTransaction([FromBody] TransferRequest request)
         {
             if (request.Amount <= 0)
                 return BadRequest("Amount must be greater than zero.");
 
-            if (request.FromAccountId == request.ToAccountId)
-                return BadRequest("Cannot transfer money to the same account.");
+            var userIdString = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            
+            if (string.IsNullOrEmpty(userIdString) || !Guid.TryParse(userIdString, out Guid senderAccountId))
+                return Unauthorized("Invalid token identity.");
+
+            if (senderAccountId == request.ToAccountId)
+                return BadRequest("Cannot transfer money to your own account.");
 
             bool alreadyExists = await _context.LedgerEntries
                 .AnyAsync(e => e.IdempotencyKey == request.IdempotencyKey);
-
+            
             if (alreadyExists)
                 return Conflict("This transaction has already been processed.");
 
-            var accountsExist = await _context.Accounts
-                .Where(a => a.Id == request.FromAccountId || a.Id == request.ToAccountId)
-                .CountAsync() == 2;
+            var receiverExists = await _context.Accounts.AnyAsync(a => a.Id == request.ToAccountId);
+            if (!receiverExists)
+                return NotFound("The receiving account does not exist.");
 
-            if (!accountsExist)
-                return NotFound("One or both accounts do not exist.");
+            var senderBalance = await _context.LedgerEntries
+                .Where(e => e.AccountId == senderAccountId)
+                .SumAsync(e => e.Amount);
 
-            if (request.FromAccountId != _centralBankId)
-            {
-                var senderBalance = await _context.LedgerEntries
-                    .Where(e => e.AccountId == request.FromAccountId)
-                    .SumAsync(e => e.Amount);
-            
-                if (senderBalance < request.Amount)
-                    return BadRequest("Insufficient funds. The sender does not have enough money to complete this transaction.");
-            }
             var transactionId = Guid.NewGuid();
             var timestamp = DateTime.UtcNow;
 
+            if (senderBalance < request.Amount)
+                return BadRequest("Insufficient funds.");
+
             var debitEntry = new LedgerEntry
             {
-                AccountId = request.FromAccountId,
+                AccountId = senderAccountId,
                 TransactionId = transactionId,
                 IdempotencyKey = request.IdempotencyKey,
                 Amount = -request.Amount, 
@@ -132,7 +133,7 @@ namespace LedgerEngine.Api.Controllers
             return Ok(history);
         }  
 
-    [HttpPost("deposit")]
+        [HttpPost("deposit")]
         public async Task<IActionResult> CreateDeposit([FromBody] DepositRequest request)
         {
             if (request.Amount <= 0)
@@ -163,9 +164,9 @@ namespace LedgerEngine.Api.Controllers
             return Ok(new { Message = "Deposit successful", Entry = newEntry });
         }
     }
+
     public class DepositRequest
     {
-    public decimal Amount { get; set; }
+        public decimal Amount { get; set; }
     }
-
 }
